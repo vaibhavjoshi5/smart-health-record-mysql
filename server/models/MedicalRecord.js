@@ -1,16 +1,9 @@
-const mongoose = require('mongoose');
-
-const medicalRecordSchema = new mongoose.Schema({
-  patient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  doctor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  date: { type: Date, required: true },
-  symptoms: { type: String },
-  diagnosis: { type: String },
-  doctorNotes: { type: String },
-  fileUrl: { type: String }, // URL or path to uploaded file (PDF/image)
-  fileName: { type: String },
-  fileType: { type: String },
-  fileData: { type: Buffer, select: false },
-}, { timestamps: true });
-
-module.exports = mongoose.model('MedicalRecord', medicalRecordSchema);
+const { getPool } = require('../config/db');
+const { record, user } = require('./helpers');
+const select = 'SELECT mr.*, d.name AS doctor_name FROM medical_records mr LEFT JOIN users d ON d.id = mr.doctor_id';
+async function create(values) { const [result] = await getPool().execute('INSERT INTO medical_records (patient_id, doctor_id, record_date, symptoms, diagnosis, doctor_notes, file_name, file_type, file_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [values.patientId, values.doctorId || null, values.date, values.symptoms || null, values.diagnosis || null, values.doctorNotes || null, values.fileName || null, values.fileType || null, values.fileData || null]); return findById(result.insertId, Boolean(values.fileData)); }
+async function findById(id, includeFile = false) { const columns = includeFile ? 'mr.*' : 'mr.id, mr.patient_id, mr.doctor_id, mr.record_date, mr.symptoms, mr.diagnosis, mr.doctor_notes, mr.file_name, mr.file_type, mr.created_at, mr.updated_at'; const [rows] = await getPool().execute(`SELECT ${columns}, d.name AS doctor_name FROM medical_records mr LEFT JOIN users d ON d.id = mr.doctor_id WHERE mr.id = ?`, [id]); return record(rows[0], includeFile); }
+async function findByPatient(patientId, { descending = false, date, symptom } = {}) { let sql = `${select} WHERE mr.patient_id = ?`; const params = [patientId]; if (date) { sql += ' AND mr.record_date = ?'; params.push(date); } if (symptom) { sql += ' AND mr.symptoms LIKE ?'; params.push(`%${symptom}%`); } sql += ` ORDER BY mr.record_date ${descending ? 'DESC' : 'ASC'}, mr.id DESC`; const [rows] = await getPool().execute(sql, params); return rows.map(row => record(row)); }
+async function findByDoctor(doctorId) { const [rows] = await getPool().execute(`${select} WHERE mr.doctor_id = ? ORDER BY mr.record_date DESC`, [doctorId]); return rows.map(row => record(row)); }
+async function patientsForDoctor(doctorId) { const [rows] = await getPool().execute('SELECT DISTINCT u.id, u.name, u.email, u.password_hash, u.role, u.blood_group, u.allergies, u.chronic_diseases, u.emergency_contact, u.reset_token, u.reset_token_expiry, u.created_at, u.updated_at FROM users u INNER JOIN medical_records mr ON mr.patient_id = u.id WHERE mr.doctor_id = ? ORDER BY u.name', [doctorId]); return rows.map(user); }
+module.exports = { create, findById, findByPatient, findByDoctor, patientsForDoctor };

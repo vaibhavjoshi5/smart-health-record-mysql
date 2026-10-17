@@ -1,41 +1,7 @@
-const express = require('express');
-const router = express.Router();
-const User = require('../models/User');
-const MedicalRecord = require('../models/MedicalRecord');
-const { authMiddleware, requireSelfOrRole } = require('./auth');
-const asyncHandler = require('../middleware/asyncHandler');
-const { AppError } = require('../middleware/errorHandler');
-
-// Public directory for appointment booking. Never expose patient profiles here.
-router.get('/doctors', authMiddleware, asyncHandler(async (req, res) => {
-  const users = await User.find({ role: 'doctor' }).select('_id name');
-  res.json(users);
-}));
-
-// 1. Update user details
-router.put('/update/:userId', authMiddleware, requireSelfOrRole(), asyncHandler(async (req, res) => {
-  const { name, bloodGroup, allergies, chronicDiseases, emergencyContact } = req.body;
-  const user = await User.findByIdAndUpdate(
-    req.params.userId,
-    { name, bloodGroup, allergies, chronicDiseases, emergencyContact },
-    { new: true, runValidators: true }
-  ).select('-password -resetToken -resetTokenExpiry');
-  if (!user) throw new AppError('User not found', 404);
-  res.json(user);
-}));
-
-// 2. Get user profile
-router.get('/:userId', authMiddleware, requireSelfOrRole(), asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.userId).select('-password');
-  if (!user) throw new AppError('User not found', 404);
-  res.json(user);
-}));
-
-// 3. Export all records for a user (as JSON)
-router.get('/export/:userId', authMiddleware, requireSelfOrRole('doctor'), asyncHandler(async (req, res) => {
-  const records = await MedicalRecord.find({ patient: req.params.userId }).populate('doctor', 'name');
-  res.setHeader('Content-Disposition', 'attachment; filename=records.json');
-  res.json(records);
-}));
-
+const express = require('express'); const User = require('../models/User'); const MedicalRecord = require('../models/MedicalRecord'); const { authMiddleware, requireSelfOrRole } = require('./auth'); const asyncHandler = require('../middleware/asyncHandler'); const { AppError } = require('../middleware/errorHandler'); const router = express.Router();
+function publicProfile(user) { if (!user) return null; const { password, resetToken, resetTokenExpiry, ...safe } = user; return safe; }
+router.get('/doctors', authMiddleware, asyncHandler(async (_req, res) => { const doctors = await User.listDoctors(); res.json(doctors.map(({ _id, name }) => ({ _id, name }))); }));
+router.put('/update/:userId', authMiddleware, requireSelfOrRole(), asyncHandler(async (req, res) => { const user = await User.updateProfile(req.params.userId, req.body); if (!user) throw new AppError('User not found', 404); res.json(publicProfile(user)); }));
+router.get('/:userId', authMiddleware, requireSelfOrRole(), asyncHandler(async (req, res) => { const user = await User.findById(req.params.userId); if (!user) throw new AppError('User not found', 404); res.json(publicProfile(user)); }));
+router.get('/export/:userId', authMiddleware, requireSelfOrRole('doctor'), asyncHandler(async (req, res) => { res.setHeader('Content-Disposition', 'attachment; filename=records.json'); res.json(await MedicalRecord.findByPatient(req.params.userId)); }));
 module.exports = { router };

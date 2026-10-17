@@ -1,11 +1,11 @@
-# Smart Health Record
+# Smart Health Record - MySQL Edition
 
-Compact full-stack application for managing appointments, medical records, file uploads, and an AI chat assistant.
+Separate MySQL/Aiven edition of Smart Health Record. The original MongoDB edition remains unchanged in its own folder/repository.
 
 ## Tech stack
 - Frontend: React
 - Backend: Node.js, Express
-- Database: MongoDB (Mongoose)
+- Database: MySQL (Aiven compatible, using mysql2)
 - Auth: JWT / session-based routes
 
 ## Key features
@@ -16,7 +16,7 @@ Compact full-stack application for managing appointments, medical records, file 
 - Unit/integration tests for server routes
 
 ## Quick setup (local)
-1. Copy `server/.env.example` to `server/.env` and replace the placeholder values.
+1. Create an Aiven MySQL service and copy its host, port, database, user, password and CA certificate into `server/.env`. Copy `server/.env.example` as the starting point. Tables are created automatically on the first successful connection.
 
 2. Install server dependencies
 
@@ -38,7 +38,8 @@ Or run `npm install` and `npm start` from the project root after installing both
 
 ## Required environment variables
 
-- `MONGO_URI`: MongoDB connection string
+- `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`: Aiven MySQL connection settings
+- `MYSQL_SSL=true` and `MYSQL_SSL_CA`: required for a secure Aiven connection
 - `JWT_SECRET`: long, random signing secret
 - `FRONTEND_URL`: allowed browser origin and password-reset URL
 - `EMAIL_USER` / `EMAIL_PASS`: Gmail credentials for password-reset email
@@ -52,13 +53,13 @@ npm run build
 ```
 
 ## Resume-ready bullets
-- Built a full-stack Smart Health Record app (React, Node.js/Express, MongoDB) implementing authentication, role-based doctor/patient views, appointment scheduling, and secure medical-record CRUD.
+- Built a full-stack Smart Health Record app (React, Node.js/Express, MySQL) implementing authentication, role-based doctor/patient views, appointment scheduling, and secure medical-record CRUD.
 - Integrated file upload pipeline and an AI chat assistant endpoint; designed RESTful APIs and reusable React components to improve developer productivity and UX.
 - Wrote unit and integration tests for critical server routes, added production build scripts and startup automation for local demos.
 
 Suggested single-line resume entry:
 
-"Developed a full‑stack Smart Health Record application (React, Node.js, MongoDB) with authentication, appointment scheduling, medical-record management, secure file uploads, and an AI chat prototype."
+"Developed a full-stack Smart Health Record application (React, Node.js, MySQL) with authentication, appointment scheduling, medical-record management, secure file uploads, and an AI chat prototype."
 
 ## Demo / next steps
 - Deploy the backend to Heroku/Azure and frontend to Vercel for a live demo link.

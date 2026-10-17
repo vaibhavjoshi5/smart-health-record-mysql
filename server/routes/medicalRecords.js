@@ -1,68 +1,7 @@
-const express = require('express');
-const router = express.Router();
-const multer = require('multer');
-const MedicalRecord = require('../models/MedicalRecord');
-const User = require('../models/User');
-const { authMiddleware, requireSelfOrRole } = require('./auth');
-const asyncHandler = require('../middleware/asyncHandler');
-const { AppError } = require('../middleware/errorHandler');
-
-// Configure multer for file uploads
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new AppError('Only PDF and image files are allowed', 400), false);
-    }
-  }
-});
-
-// Upload a medical record
-router.post('/upload', authMiddleware, upload.single('file'), asyncHandler(async (req, res) => {
-  const { patientId, doctorId, date, symptoms, diagnosis, doctorNotes } = req.body;
-  if (req.user.role === 'doctor' && String(doctorId) !== String(req.user.id)) {
-    return res.status(403).json({ success: false, message: 'Doctor identity does not match authenticated user' });
-  }
-  if (req.user.role === 'patient' && String(patientId) !== String(req.user.id)) {
-    return res.status(403).json({ success: false, message: 'Patients can only upload their own records' });
-  }
-  const record = new MedicalRecord({
-    patient: patientId,
-    doctor: req.user.role === 'doctor' ? doctorId : undefined,
-    date,
-    symptoms,
-    diagnosis,
-    doctorNotes,
-    fileName: req.file?.originalname,
-    fileType: req.file?.mimetype,
-    fileData: req.file?.buffer
-  });
-  await record.save();
-  res.status(201).json({ success: true, message: 'Medical record uploaded', record });
-}));
-
-// Get all records for a patient
-router.get('/patient/:patientId', authMiddleware, requireSelfOrRole('doctor'), asyncHandler(async (req, res) => {
-  const records = await MedicalRecord.find({ patient: req.params.patientId }).populate('doctor', 'name');
-  res.json(records);
-}));
-
-// Download a record file
-router.get('/download/:id', authMiddleware, asyncHandler(async (req, res) => {
-  const record = await MedicalRecord.findById(req.params.id).select('+fileData');
-  if (!record || !record.fileData) {
-    throw new AppError('File not found', 404);
-  }
-  if (req.user.role !== 'doctor' && String(record.patient) !== String(req.user.id)) {
-    throw new AppError('You are not allowed to download this record', 403);
-  }
-  res.setHeader('Content-Type', record.fileType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(record.fileName || 'medical-record')}"`);
-  res.send(record.fileData);
-}));
-
+const express = require('express'); const multer = require('multer'); const MedicalRecord = require('../models/MedicalRecord');
+const { authMiddleware, requireSelfOrRole } = require('./auth'); const asyncHandler = require('../middleware/asyncHandler'); const { AppError } = require('../middleware/errorHandler'); const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024 }, fileFilter: (_req, file, cb) => { const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']; cb(allowed.includes(file.mimetype) ? null : new AppError('Only PDF and image files are allowed', 400), allowed.includes(file.mimetype)); } });
+router.post('/upload', authMiddleware, upload.single('file'), asyncHandler(async (req, res) => { const { patientId, doctorId, date, symptoms, diagnosis, doctorNotes } = req.body; if (req.user.role === 'doctor' && String(doctorId) !== String(req.user.id)) return res.status(403).json({ success: false, message: 'Doctor identity does not match authenticated user' }); if (req.user.role === 'patient' && String(patientId) !== String(req.user.id)) return res.status(403).json({ success: false, message: 'Patients can only upload their own records' }); const record = await MedicalRecord.create({ patientId, doctorId: req.user.role === 'doctor' ? doctorId : null, date, symptoms, diagnosis, doctorNotes, fileName: req.file?.originalname, fileType: req.file?.mimetype, fileData: req.file?.buffer }); res.status(201).json({ success: true, message: 'Medical record uploaded', record }); }));
+router.get('/patient/:patientId', authMiddleware, requireSelfOrRole('doctor'), asyncHandler(async (req, res) => res.json(await MedicalRecord.findByPatient(req.params.patientId))));
+router.get('/download/:id', authMiddleware, asyncHandler(async (req, res) => { const record = await MedicalRecord.findById(req.params.id, true); if (!record?.fileData) throw new AppError('File not found', 404); if (req.user.role !== 'doctor' && String(record.patient) !== String(req.user.id)) throw new AppError('You are not allowed to download this record', 403); res.setHeader('Content-Type', record.fileType || 'application/octet-stream'); res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(record.fileName || 'medical-record')}"`); res.send(record.fileData); }));
 module.exports = { router };
